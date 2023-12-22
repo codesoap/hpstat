@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -50,18 +51,21 @@ func main() {
 func printStats() {
 	invalidLines := 0
 	statusCodeCounts := make(map[int]int)
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		statusCode, err := extractStatusCode(scanner.Bytes())
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Reading standard input failed: %v\n", err)
+			os.Exit(1)
+		}
+		statusCode, err := extractStatusCode(line)
 		if err != nil {
 			invalidLines++
 		} else {
 			statusCodeCounts[statusCode]++
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Reading standard input failed: %v\n", err)
-		os.Exit(1)
 	}
 	if invalidLines > 0 {
 		fmt.Println("Invalid lines:", invalidLines)
@@ -78,16 +82,19 @@ func printStats() {
 
 func filter() {
 	desiredStatusCodes := getDesiredStatusCodes()
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		statusCode, err := extractStatusCode(scanner.Bytes())
-		if _, ok := desiredStatusCodes[statusCode]; err == nil && ok {
-			fmt.Println(scanner.Text())
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Reading standard input failed: %v\n", err)
+			os.Exit(1)
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Reading standard input failed: %v\n", err)
-		os.Exit(1)
+		statusCode, err := extractStatusCode(line)
+		if _, ok := desiredStatusCodes[statusCode]; err == nil && ok {
+			fmt.Print(string(line))
+		}
 	}
 }
 
