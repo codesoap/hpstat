@@ -12,9 +12,15 @@ import (
 	"strings"
 )
 
-var usageDetails = `
+var usageDetails = `Usage:
+    %s
+    %s -i
+    %s [-v] FILTER...
+
 If no argument is given, the amounts of occurrences of each status code
 are counted and displayed.
+
+If the -i flag is given, all invalid lines will be printed.
 
 If one or more arguments are given, lines are filtered and printed only
 if they match the filter. Arguments may either be single status codes,
@@ -24,6 +30,7 @@ If the -v flag is given, the filter is inverted. Only lines with status
 codes, that don't match the given arguments, will be printed.
 `
 
+var iFlag bool
 var vFlag bool
 
 // This is incomplete, but more is not needed here.
@@ -33,19 +40,26 @@ type httpline struct {
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [-v] [FILTER]...\n", os.Args[0])
-		fmt.Fprint(flag.CommandLine.Output(), usageDetails)
+		fmt.Fprintf(flag.CommandLine.Output(), usageDetails, os.Args[0], os.Args[0], os.Args[0])
+		os.Exit(1)
 	}
+	flag.BoolVar(&iFlag, "i", false, "Show invalid requests.")
 	flag.BoolVar(&vFlag, "v", false, "Invert filter.")
 	flag.Parse()
+	if iFlag && (len(flag.Args()) != 0 || vFlag) {
+		flag.Usage()
+	}
 }
 
 func main() {
+	if iFlag {
+		printInvalidLines()
+	}
 	if len(flag.Args()) == 0 {
 		printStats()
-		return
+	} else {
+		filter()
 	}
-	filter()
 }
 
 func printStats() {
@@ -77,6 +91,22 @@ func printStats() {
 	sort.Ints(seenStatusCodes)
 	for _, statusCode := range seenStatusCodes {
 		fmt.Printf("Status code %d: %dx\n", statusCode, statusCodeCounts[statusCode])
+	}
+}
+
+func printInvalidLines() {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Reading standard input failed: %v\n", err)
+			os.Exit(1)
+		}
+		if _, err := extractStatusCode(line); err != nil {
+			fmt.Print(string(line))
+		}
 	}
 }
 
@@ -112,7 +142,6 @@ func getDesiredStatusCodes() map[int]bool {
 			if err != nil || statusCode < 100 || statusCode > 599 {
 				fmt.Fprintf(os.Stderr, "Error: Invalid argument '%s'.\n", arg)
 				flag.Usage()
-				os.Exit(1)
 			}
 			if vFlag {
 				delete(desiredStatusCodes, statusCode)
@@ -124,13 +153,11 @@ func getDesiredStatusCodes() map[int]bool {
 			if err != nil || minStatusCode < 100 || minStatusCode > 599 {
 				fmt.Fprintf(os.Stderr, "Error: Invalid argument '%s'.\n", arg)
 				flag.Usage()
-				os.Exit(1)
 			}
 			maxStatusCode, err := strconv.Atoi(split[1])
 			if err != nil || maxStatusCode < 100 || maxStatusCode > 599 || minStatusCode > maxStatusCode {
 				fmt.Fprintf(os.Stderr, "Error: Invalid argument '%s'.\n", arg)
 				flag.Usage()
-				os.Exit(1)
 			}
 			for statusCode := minStatusCode; statusCode <= maxStatusCode; statusCode++ {
 				if vFlag {
@@ -142,7 +169,6 @@ func getDesiredStatusCodes() map[int]bool {
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: Invalid argument '%s'.\n", arg)
 			flag.Usage()
-			os.Exit(1)
 		}
 	}
 	return desiredStatusCodes
