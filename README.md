@@ -20,6 +20,11 @@ $ # Extract all non-2xx responses:
 $ cat /path/to/saved/httpipe | hpstat -v 200:299 > /path/to/new/file
 ```
 
+# Installation
+You can download precompiled binaries from the [releases
+page](https://github.com/codesoap/hpstat/releases) or install it with
+`go install github.com/codesoap/hpstat@latest`.
+
 # Usage
 ```console
 $ hpstat -h
